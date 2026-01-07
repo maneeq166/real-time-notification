@@ -9,21 +9,40 @@ export const createNotification = async (
     throw new Error("Required fields are missing");
   }
 
-  let read: boolean = false;
+  if (!payload.actor.id) {
+    throw new Error("Actor id Required");
+  }
 
   const notification = await prisma.notification.create({
     data: {
       userId,
       type,
       payload,
-      read,
     },
   });
 
   return notification;
 };
 
-export const getNotification = async (userId: string) => {
+// export const getNotification = async (userId: string) => {
+//   if (!userId) {
+//     throw new Error("Required fields are missing");
+//   }
+
+//   const user = await prisma.user.findUnique({ where: { id: userId } });
+
+//   if (!user) {
+//     throw new Error("User does not exist");
+//   }
+
+//   const notification = await prisma.notification.findMany({
+//     where: { userId },
+//   });
+
+//   return notification;
+// };
+
+export const getUnreadNotification = async (userId: string) => {
   if (!userId) {
     throw new Error("Required fields are missing");
   }
@@ -34,36 +53,27 @@ export const getNotification = async (userId: string) => {
     throw new Error("User does not exist");
   }
 
-  const notification = await prisma.notification.findMany({
-    where: { userId },
+  const unreadNotification = await prisma.notification.findMany({
+    where: { userId, read: false },
   });
 
-  return notification;
+  const result = {
+    unreadNotification,
+    length: unreadNotification.length,
+  };
+
+  return result;
 };
 
-export const getUnreadNotification = async (userId: string) => {
-  if (!userId) {
-    throw new Error("Required fields are missing");
-  }
-
-  const user = prisma.user.findUnique({ where: { id: userId } });
-
-  if (!user) {
-    throw new Error("User does not exist");
-  }
-
-  const unreadNotification = prisma.notification.findMany({
-    where: { id: userId, read: false },
-  });
-  return unreadNotification;
-};
-
-export const patchUnreadNotification = async (notificationId: string) => {
+export const patchUnreadNotification = async (
+  notificationId: string,
+  userId: string
+) => {
   if (!notificationId) {
     throw new Error("Required fields are missing");
   }
   let notification = prisma.notification.update({
-    where: { id: notificationId },
+    where: { id: notificationId, userId },
     data: { read: true },
   });
 
@@ -72,4 +82,21 @@ export const patchUnreadNotification = async (notificationId: string) => {
   }
 
   return notification;
+};
+
+export const patchUnreadAllNotification = async (userId: string) => {
+  if (!userId) {
+    throw new Error("Required fields are missing");
+  }
+
+  const notifications = await prisma.notification.updateMany({
+    where: { userId },
+    data: { read: true },
+  });
+
+  if (!notifications) {
+    throw new Error("Notification not found");
+  }
+
+  return notifications;
 };

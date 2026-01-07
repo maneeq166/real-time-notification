@@ -6,6 +6,6 @@ const authRouter = Router();
 
 authRouter.post("/register", register);
 authRouter.post("/login", login);
-authRouter.get("/:id", authMiddleware, me);
+authRouter.get("/", authMiddleware, me);
 
 export { authRouter };
