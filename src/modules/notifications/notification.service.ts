@@ -1,3 +1,4 @@
+import { io } from "../../index.js";
 import { prisma } from "../../lib/prisma.js";
 
 export const createNotification = async (
@@ -20,6 +21,7 @@ export const createNotification = async (
       payload,
     },
   });
+  io.to(userId).emit("Notification:new",notification);
 
   return notification;
 };

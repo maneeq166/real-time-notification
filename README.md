@@ -1029,3 +1029,239 @@ If you want next, say:
 - `next: error handling`
 - `next: folder structure`
 - `next: socket.io minimal`
+
+Below are **minimal, production-style WebSocket (Socket.IO) code snippets** for a notification system.
+
+Not full files.
+Only the **core patterns** you will actually write.
+
+This is enough to implement it yourself without dependency.
+
+---
+
+# 1. Install
+
+```bash
+npm install socket.io
+```
+
+(If client later: `socket.io-client`)
+
+---
+
+# 2. Attach Socket.IO to server
+
+```ts
+// src/server.ts
+import { createServer } from "http";
+import { Server } from "socket.io";
+import { app } from "./app.js";
+
+const httpServer = createServer(app);
+
+export const io = new Server(httpServer, {
+  cors: { origin: "*" },
+});
+
+httpServer.listen(3000);
+```
+
+---
+
+# 3. Socket bootstrap
+
+```ts
+// src/socket/socket.ts
+import { io } from "../server.js";
+
+io.on("connection", (socket) => {
+  console.log("Socket connected:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("Socket disconnected:", socket.id);
+  });
+});
+```
+
+Import once in server startup.
+
+---
+
+# 4. Authenticate socket (JWT)
+
+```ts
+// src/socket/socket.ts
+import jwt from "jsonwebtoken";
+
+io.use((socket, next) => {
+  try {
+    const token = socket.handshake.auth.token;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!);
+    socket.data.user = decoded;
+    next();
+  } catch {
+    next(new Error("Unauthorized"));
+  }
+});
+```
+
+Client sends:
+
+```ts
+io("http://localhost:3000", {
+  auth: { token: "JWT_HERE" },
+});
+```
+
+---
+
+# 5. Join user room
+
+Each user gets **their own room**.
+
+```ts
+io.on("connection", (socket) => {
+  const userId = socket.data.user.id;
+
+  socket.join(userId);
+
+  console.log("User joined room:", userId);
+});
+```
+
+Now you can emit to a specific user.
+
+---
+
+# 6. Emit notification after DB save
+
+```ts
+// src/modules/notifications/notification.service.ts
+import { io } from "../../server.js";
+
+export async function createNotification(data) {
+  const notification = await prisma.notification.create({ data });
+
+  io.to(data.userId).emit("notification:new", notification);
+
+  return notification;
+}
+```
+
+This is the **entire real-time logic.**
+
+DB first.
+Socket second.
+
+---
+
+# 7. Client receive example
+
+```ts
+socket.on("notification:new", (notification) => {
+  console.log("New notification:", notification);
+});
+```
+
+---
+
+# 8. Mark online users (optional)
+
+```ts
+const onlineUsers = new Map<string, string>();
+
+io.on("connection", (socket) => {
+  onlineUsers.set(socket.data.user.id, socket.id);
+
+  socket.on("disconnect", () => {
+    onlineUsers.delete(socket.data.user.id);
+  });
+});
+```
+
+Used only for presence.
+
+---
+
+# 9. Important mental model
+
+REST API:
+
+Used for:
+
+- initial load
+- history
+- reliability
+
+WebSockets:
+
+Used for:
+
+- instant delivery
+- UI updates
+
+Golden rule:
+
+DB write ALWAYS happens even if socket fails.
+
+---
+
+# 10. Typical flow in your project
+
+```text
+User A follows User B
+        ↓
+POST /events/follow
+        ↓
+create notification (DB)
+        ↓
+emit socket event
+        ↓
+if online → instant UI update
+if offline → user fetches later
+```
+
+---
+
+# 11. What you should implement first
+
+1. Socket server attach
+2. JWT socket auth
+3. Join user room
+4. Emit on notification create
+5. Client log listener
+
+Stop.
+
+Then scale.
+
+---
+
+# 12. Event names you will use
+
+```
+notification:new
+notification:read
+notification:clear
+```
+
+---
+
+# 13. Minimal folder placement
+
+```
+src/
+  server.ts
+  socket/socket.ts
+  modules/notifications/notification.service.ts
+```
+
+---
+
+If you want next, I can give you:
+
+• Redis pub/sub socket scaling snippet
+• mobile push extension design
+• notification batching logic
+• typing for socket events
+• production pitfalls (memory, auth, scaling)
